@@ -1,5 +1,5 @@
 {
-  "name": "@damienvesper/vite-spritesheet-plugin",
+  "name": "vite-spritesheet-plugin",
   "version": "0.0.1",
   "description": "A spritesheet plugin for Vite.",
   "main": "dist/index.js",
