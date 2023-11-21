@@ -3,7 +3,7 @@ import pack from 'bin-pack';
 
 import { platform } from 'os';
 
-import cropping from '../detect-edges';
+import cropping from '../detect-edges/index.js';
 
 interface Options {
     outputFormat: string

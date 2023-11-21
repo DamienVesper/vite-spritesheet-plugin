@@ -5,8 +5,8 @@ import { resolve } from 'path';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { Minimatch } from 'minimatch';
 
-import createSpritesheet from './libs/@pencil.js/spritesheet';
-import readDirectory from './utils/readDirectory';
+import createSpritesheet from './libs/@pencil.js/spritesheet.js';
+import readDirectory from './utils/readDirectory.js';
 
 interface Pattern {
     rootDir: string // Root directory to search for assets.
