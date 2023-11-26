@@ -1,112 +1,119 @@
-import type { Plugin, ResolvedConfig } from 'vite';
-import { watch, type FSWatcher } from 'chokidar';
-
-import { resolve } from 'path';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import type { FSWatcher, Plugin, ResolvedConfig } from 'vite';
+import { watch } from 'chokidar';
 import { Minimatch } from 'minimatch';
 
-import createSpritesheet from './libs/@pencil.js/spritesheet.js';
 import readDirectory from './utils/readDirectory.js';
+import { type AtlasList, type CompilerOptions, createSpritesheets } from "./utils/spritesheet.js";
+import { resolve } from 'path';
 
 interface Pattern {
-    rootDir: string // Root directory to search for assets.
-    outDir?: string // Output directory to search for assets.
-    glob?: string // Glob expression to match assets.
-    filename?: string // The name of the output file. Default is spritesheet.png.
+    /**
+     * Root directory to search for assets.
+     */
+    rootDir: string
+    /**
+     *  Glob expression to match assets.
+     *  @default *.{png,gif,jpg,bmp,tiff,svg}
+     */
+    glob?: string
 }
 
 interface PluginOptions {
-    patterns: Pattern[] // All the patterns.
+    /**
+     * List of patterns to search for assets
+     */
+    patterns: Pattern[]
 
-    // Extra compiler options.
-    compilerOptions?: Partial<{
-        format: `png` | `jpeg` | `svg`
-        margin: number // Margin between assets.
-        crop: boolean // Whether to crop extra whitespace from assets.
-        svgo: boolean // Whether to optimize assets with svgo.
-    }>
+    options?: Partial<CompilerOptions>
 }
+
+const defaultGlob = `**/*.{png,gif,jpg,bmp,tiff,svg}`;
 
 const PLUGIN_NAME = `vite-spritesheet-plugin`;
 
-async function buildSpritesheet (patternConfig: Pattern, compilerOpts: Required<PluginOptions[`compilerOptions`]>): Promise<{ pattern: Required<Pattern>, json: string, atlas: Buffer }> {
-    const pattern = {
-        rootDir: patternConfig.rootDir,
-        outDir: patternConfig.outDir ?? ``,
+async function buildSpritesheets (patternsConfig: Pattern[], compilerOpts: CompilerOptions): Promise<AtlasList> {
+    const files: string[] = [];
 
-        glob: patternConfig.glob ?? `**/*.{png,gif,jpg,bmp,tiff,svg}`,
-        filename: patternConfig.filename ?? `spritesheet.png`
-    };
+    for (const patternConfig of patternsConfig) {
+        const pattern = {
+            rootDir: patternConfig.rootDir,
+            glob: patternConfig.glob ?? defaultGlob
+        };
 
-    const imagesMatcher = new Minimatch(pattern.glob);
+        const imagesMatcher = new Minimatch(pattern.glob);
 
-    const files = readDirectory(pattern.rootDir).filter(x => imagesMatcher.match(x));
-    const options = Object.assign({ outputName: pattern.filename }, compilerOpts);
+        files.push(...readDirectory(pattern.rootDir).filter(x => imagesMatcher.match(x)));
+    }
 
-    const { json, image } = await createSpritesheet(files, options);
-    return {
-        pattern,
-        json: JSON.stringify(json),
-        atlas: image
-    };
+    return await createSpritesheets(files, compilerOpts);
 }
 
-export function spritesheet ({
-    patterns,
-    compilerOptions
-}: PluginOptions): Plugin[] {
-    let config: ResolvedConfig;
+export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
     let watcher: FSWatcher;
+    let config: ResolvedConfig;
 
     const compilerOpts = {
-        format: `png`,
-        margin: 0,
-        crop: true,
-        svgo: true,
-        ...(compilerOptions ?? {})
-    } satisfies NonNullable<PluginOptions[`compilerOptions`]>;
+        outputFormat: `png`,
+        outDir: `atlases`,
+        margin: 1,
+        removeExtensions: false,
+        maximumSize: 4096,
+        ...(options ?? {})
+    } satisfies NonNullable<CompilerOptions>;
+
+    const virtualModuleId = `virtual:spritesheets-jsons`;
+    const resolvedVirtualModuleId = `\0${virtualModuleId}`;
+
+    let spritesheets: AtlasList;
+
+    let atlases: AtlasJSON[] = [];
 
     return [
         {
             name: `${PLUGIN_NAME}:build`,
             apply: `build`,
-            configResolved: async (_config) => {
-                config = _config;
+            async buildStart () {
+                this.info(`Building spritesheets`);
+                spritesheets = await buildSpritesheets(patterns, compilerOpts);
+                atlases = spritesheets.map((sheet) => sheet.json);
             },
-            writeBundle: async () => {
-                for (const pattern of patterns) {
-                    try {
-                        const spritesheet = await buildSpritesheet(pattern, compilerOpts);
-                        const filename = spritesheet.pattern.filename.replace(`.${compilerOpts.format}`, ``);
-
-                        const dirPath = resolve(config.root, config.build.outDir, pattern.outDir ?? ``);
-                        const filePath = resolve(dirPath, filename);
-
-                        if (!existsSync(dirPath)) mkdirSync(dirPath);
-
-                        writeFileSync(`${filePath}.${compilerOpts.format}`, spritesheet.atlas);
-                        writeFileSync(`${filePath}.json`, spritesheet.json);
-
-                        config.logger.info(`Built atlas ${filename}.${compilerOpts.format}`);
-                    } catch (e: unknown) {
-                        config.logger.error(`Failed to build atlas ${pattern.filename ?? `spritesheet.png`}`);
-                        config.logger.error(e as string);
-                    }
+            generateBundle () {
+                for (const sheet of spritesheets) {
+                    this.emitFile({
+                        type: `asset`,
+                        fileName: sheet.json.meta.image,
+                        source: sheet.image
+                    });
+                    this.info(`Built atlas ${sheet.json.meta.image}`);
+                }
+            },
+            resolveId (id) {
+                if (id === virtualModuleId) {
+                    return resolvedVirtualModuleId;
+                }
+            },
+            load (id) {
+                if (id === resolvedVirtualModuleId) {
+                    return `export const atlases = ${JSON.stringify(atlases)}`;
                 }
             }
         },
         {
             name: `${PLUGIN_NAME}:serve`,
             apply: `serve`,
-            configResolved: async (_config) => {
-                config = _config;
+            configResolved (cfg) {
+                config = cfg;
             },
-            configureServer: async (server) => {
-                function reloadPage (): void {
-                    server.ws.send({ type: `full-reload`, path: `*` });
+            async configureServer (server) {
+                function reloadPage (file: string): void {
+                    console.log(`File ${file} modified, rebuilding spritesheets`);
+                    buildSheets().then(() => {
+                        const module = server.moduleGraph.getModuleById(resolvedVirtualModuleId);
+                        if (module !== undefined) void server.reloadModule(module);
+                    }).catch(console.error);
                 }
 
-                watcher = watch(patterns.map(pattern => resolve(pattern.rootDir, pattern.glob ?? `**/*.{png,gif,jpg,bmp,tiff,svg}`)), {
+                watcher = watch(patterns.map(pattern => resolve(pattern.rootDir, pattern.glob ?? defaultGlob)), {
                     cwd: config.root,
                     ignoreInitial: true
                 })
@@ -115,30 +122,27 @@ export function spritesheet ({
                     .on(`unlink`, reloadPage);
 
                 const files = new Map<string, Buffer | string>();
-                for (const pattern of patterns) {
-                    const spritesheet = await buildSpritesheet(pattern, compilerOpts);
 
-                    const filename = spritesheet.pattern.filename.replace(`.${compilerOpts.format}`, ``);
-                    const filePath = resolve(pattern.outDir ?? ``, filename);
+                async function buildSheets (): Promise<void> {
+                    spritesheets = await buildSpritesheets(patterns, compilerOpts);
+                    atlases = spritesheets.map((sheet) => sheet.json);
 
-                    files.set(`${filePath}.${compilerOpts.format}`, spritesheet.atlas);
-                    files.set(`${filePath}.json`, spritesheet.json);
+                    files.clear();
+                    for (const sheet of spritesheets) {
+                        files.set(sheet.json.meta.image, sheet.image);
+                    }
                 }
+                await buildSheets();
 
                 return () => {
                     server.middlewares.use((req, res, next) => {
-                        if (req.url === undefined) return next();
+                        if (req.originalUrl === undefined) return next();
 
-                        const file = files.get(req.url.slice(1));
+                        const file = files.get(req.originalUrl.slice(1));
                         if (file === undefined) return next();
 
                         res.writeHead(200, {
-                            [`Content-Type`]: req.url.endsWith(`.json`)
-                                ? `application/json`
-                                : req.url.endsWith(`.jpeg`)
-                                    ? `image/jpeg`
-                                    : `image/png`,
-                            [`Cache-Control`]: `no-cache`
+                            [`Content-Type`]: `image/${compilerOpts.outputFormat}`
                         });
 
                         res.end(file);
@@ -147,6 +151,16 @@ export function spritesheet ({
             },
             closeBundle: async () => {
                 await watcher.close();
+            },
+            resolveId (id) {
+                if (id === virtualModuleId) {
+                    return resolvedVirtualModuleId;
+                }
+            },
+            load (id) {
+                if (id === resolvedVirtualModuleId) {
+                    return `export const atlases = ${JSON.stringify(atlases)}`;
+                }
             }
         }
     ];
