@@ -11,22 +11,79 @@ Include this in your [Vite](https://vitejs.dev) plugin configuration.
 Configuration options are as follows:
 
 ```ts
-export interface PluginOptions {
-    patterns: Array<{
-        rootDir: string // Root directory to search for assets.
-        outDir: string // Output directory to search for assets.
-        glob?: string // Glob expression to match assets.
-        filename?: string // The name of the output file. Default is spritesheet.png. 
-    }>
+interface PluginOptions {
+    /**
+     * List of patterns to search for assets
+     */
+    patterns: {
+        /**
+        * Root directory to search for assets.
+        */
+        rootDir: string
+        /**
+        *  Glob expression to match assets.
+        *  @default *.{png,gif,jpg,bmp,tiff,svg}
+        */
+        glob?: string
+    }[]
 
-    // Extra compiler options.
-    compilerOptions?: Partial<{
-        format: `png` | `jpeg`
-        margin: number // Margin between assets.
-        crop: boolean // Whether to crop extra whitespace from assets.
-        svgo: boolean // Whether to optimize assets with svgo (TBD).
+    options?: Partial<{
+        /**
+        * Format of the output image
+        * @default "png"
+        */
+        outputFormat: "png" | "jpeg"
+
+        /**
+        * Output directory
+        * @default "atlases"
+        */
+        outDir: string
+
+        /**
+        * Added pixels between sprites (can prevent pixels leaking to adjacent sprite)
+        * @default 1
+        */
+        margin: number
+
+        /**
+        * Remove file extensions from the atlas frames
+        * @default false
+        */
+        removeExtensions: boolean
+
+        /**
+        * The Maximum width and height a generated image can be
+        * Once a spritesheet exceeds this size a new one will be created
+        * @default 4096
+        */
+        maximumSize: number
     }>
 }
 ```
+Then to import the spritesheets, use
+```ts
+import { atlases } from "virtual:spritesheets-jsons";
+```
 
-To define multiple spritesheets, use multiple instances of the plugin.
+### Example usage with pixi.js
+```ts
+import { Texture, Spritesheet, Sprite } from "pixi.js";
+import { atlases } from "virtual:spritesheets-jsons";
+
+const textures: Record<string, Texture> = {};
+
+for (const atlas of atlases) {
+    const texture = await Texture.fromURL(atlas.meta.image);
+    const spriteSheet = new Spritesheet(texture, atlas);
+    await spriteSheet.parse();
+
+    for (const frame in spriteSheet.textures) {
+        textures[frame] = spriteSheet.textures[frame];
+    }
+}
+
+const sprite = new Sprite(textures["file_name"]);
+
+```
+

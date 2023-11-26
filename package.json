@@ -1,6 +1,6 @@
 {
   "name": "vite-spritesheet-plugin",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A spritesheet plugin for Vite.",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -12,7 +12,7 @@
   },
   "engines": {
     "pnpm": ">=8.0.0",
-    "node": ">=20.0.0"
+    "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",
@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@types/bin-pack": "^1.0.3",
-    "@types/node": "^20.9.3",
+    "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.12.0",
     "@typescript-eslint/parser": "^6.12.0",
     "eslint": "^8.54.0",
@@ -43,11 +43,10 @@
     "typescript": "^5.3.2"
   },
   "dependencies": {
-    "bin-pack": "^1.0.2",
-    "canvas": "^2.11.2",
     "chokidar": "^3.5.3",
+    "maxrects-packer": "^2.7.3",
     "minimatch": "^9.0.3",
-    "svgo": "^3.0.4",
+    "sharp": "^0.32.6",
     "vite": "^5.0.2"
   },
   "peerDependencies": {
@@ -55,6 +54,7 @@
   },
   "files": [
     "dist",
+    "src/module.d.ts",
     "package.json",
     "README.md",
     "LICENSE"
