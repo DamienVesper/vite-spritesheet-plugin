@@ -25,6 +25,16 @@
     "svg"
   ],
   "author": "DamienVesper",
+  "contributors": [
+    {
+      "name": "DamienVesper",
+      "url": "https://github.com/DamienVesper"
+    },
+    {
+      "name": "Leia",
+      "url": "https://github.com/leia-uwu"
+    }
+  ],
   "license": "AGPL-3.0",
   "bugs": {
     "url": "https://github.com/DamienVesper/vite-spritesheet-plugin/issues"
