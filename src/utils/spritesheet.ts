@@ -1,8 +1,8 @@
 import { platform } from 'os';
 import { createHash } from 'crypto';
-import sharp, { type OverlayOptions } from 'sharp';
 
-import { MaxRectsPacker, type Rectangle } from 'maxrects-packer';
+import { type IOption, MaxRectsPacker } from 'maxrects-packer';
+import { type Image, createCanvas, loadImage } from 'canvas';
 
 export const supportedFormats = [`png`, `jpeg`] as const;
 
@@ -37,6 +37,13 @@ export interface CompilerOptions {
     * @default 4096
     */
     maximumSize: number
+
+    /**
+     * maxrects-packer options
+     * See https://soimy.github.io/maxrects-packer/
+     * Currently does not support `allowRotation` option
+     */
+    packerOptions: Omit<IOption, `allowRotation`>
 }
 
 export type AtlasList = Array<{ json: AtlasJSON, image: Buffer }>;
@@ -54,55 +61,42 @@ export async function createSpritesheets (paths: string[], options: CompilerOpti
         throw new Error(`outputFormat should only be one of ${supported}, but "${options.outputFormat}" was given.`);
     }
 
-    type PackerImage = Rectangle & {
-        data: {
-            sharp: sharp.Sharp
-            path: string
-            width: number
-            height: number
-        }
-    };
+    interface PackerRectData {
+        image: Image
+        path: string
+    }
 
-    const packer = new MaxRectsPacker<PackerImage>(options.maximumSize, options.maximumSize, options.margin, {
-        smart: true,
-        pot: true,
-        square: true,
-        allowRotation: false
-    });
+    const packer = new MaxRectsPacker(
+        options.maximumSize,
+        options.maximumSize,
+        options.margin,
+        {
+            ...options.packerOptions,
+            allowRotation: false // TODO: support rotating frames
+        }
+    );
 
     await Promise.all(paths.map(async path => {
-        const image = sharp(path);
+        const image = await loadImage(path);
 
-        const data = await image.metadata();
-
-        if (data.width === undefined || data.height === undefined) {
-            throw new Error(`Image ${path} has invalid width and height`);
-        }
-
-        packer.add(data.width, data.height, {
-            sharp: image,
-            path,
-            width: data.width,
-            height: data.height
-        });
+        packer.add(image.width, image.height, {
+            image,
+            path
+        } satisfies PackerRectData);
     }));
 
     const atlases: AtlasList = [];
 
     for (const bin of packer.bins) {
-        const canvas = sharp({
-            create: {
-                width: bin.width,
-                height: bin.height,
-                channels: 4,
-                background: { r: 0, g: 0, b: 0, alpha: 0 }
-            }
-        });
+        const canvas = createCanvas(bin.width, bin.height);
+
+        const ctx = canvas.getContext(`2d`);
 
         const json: AtlasJSON = {
             meta: {
+                app: `vite-spritesheet-plugin`,
                 image: ``,
-                scale: 1,
+                scale: `1`,
                 size: {
                     w: bin.width,
                     h: bin.height
@@ -111,16 +105,10 @@ export async function createSpritesheets (paths: string[], options: CompilerOpti
             frames: {}
         };
 
-        const images: OverlayOptions[] = [];
-
         for (const rect of bin.rects) {
-            const image = rect.data.sharp as sharp.Sharp;
+            const data: PackerRectData = rect.data;
 
-            images.push({
-                input: await image.toBuffer(),
-                left: rect.x,
-                top: rect.y
-            });
+            ctx.drawImage(data.image, rect.x, rect.y);
 
             const sourceParts = (rect.data.path as string).split(platform() === `win32` ? `\\` : `/`);
             let name = sourceParts.slice(sourceParts.length - 1, sourceParts.length).join();
@@ -133,19 +121,19 @@ export async function createSpritesheets (paths: string[], options: CompilerOpti
 
             json.frames[name] = {
                 frame: {
-                    h: rect.height,
                     w: rect.width,
+                    h: rect.height,
                     x: rect.x,
                     y: rect.y
+                },
+                sourceSize: {
+                    w: rect.width,
+                    h: rect.height
                 }
             };
         }
 
-        canvas.composite(images);
-
-        canvas.toFormat(options.outputFormat);
-
-        const buffer = await canvas.toBuffer();
+        const buffer = canvas.toBuffer(`image/${options.outputFormat}` as `image/png`);
 
         const hash = createHash(`sha1`);
         hash.setEncoding(`hex`);

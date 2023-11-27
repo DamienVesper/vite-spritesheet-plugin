@@ -58,6 +58,13 @@ interface PluginOptions {
         * @default 4096
         */
         maximumSize: number
+
+        /**
+        * maxrects-packer options
+        * See https://soimy.github.io/maxrects-packer/
+        * Currently does not support `allowRotation` option
+        */
+        packerOptions: Omit<IOption, "allowRotation">
     }>
 }
 ```
