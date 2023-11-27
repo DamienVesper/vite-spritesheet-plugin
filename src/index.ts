@@ -58,6 +58,9 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
         margin: 1,
         removeExtensions: false,
         maximumSize: 4096,
+        packerOptions: {
+            ...options?.packerOptions
+        },
         ...(options ?? {})
     } satisfies NonNullable<CompilerOptions>;
 
