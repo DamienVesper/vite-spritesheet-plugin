@@ -71,6 +71,8 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
 
     let atlases: AtlasJSON[] = [];
 
+    let buildTimeout: NodeJS.Timeout | undefined;
+
     return [
         {
             name: `${PLUGIN_NAME}:build`,
@@ -108,12 +110,17 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
                 config = cfg;
             },
             async configureServer (server) {
-                function reloadPage (file: string): void {
-                    console.log(`File ${file} modified, rebuilding spritesheets`);
-                    buildSheets().then(() => {
-                        const module = server.moduleGraph.getModuleById(resolvedVirtualModuleId);
-                        if (module !== undefined) void server.reloadModule(module);
-                    }).catch(console.error);
+                function reloadPage (): void {
+                    clearTimeout(buildTimeout);
+
+                    buildTimeout = setTimeout(() => {
+                        config.logger.info(`Rebuilding spritesheets`);
+
+                        buildSheets().then(() => {
+                            const module = server.moduleGraph.getModuleById(resolvedVirtualModuleId);
+                            if (module !== undefined) void server.reloadModule(module);
+                        }).catch(console.error);
+                    }, 500);
                 }
 
                 watcher = watch(patterns.map(pattern => resolve(pattern.rootDir, pattern.glob ?? defaultGlob)), {
