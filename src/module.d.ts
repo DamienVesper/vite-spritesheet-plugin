@@ -25,7 +25,6 @@ interface AtlasJSON {
     frames: Record<string, AtlasFrame>
 }
 
-/* eslint quotes: [1, "double", "avoid-escape"] */
 declare module "virtual:spritesheets-json" {
     export const atlases: AtlasJSON;
 }

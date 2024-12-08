@@ -4,30 +4,29 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
-  client:
-    name: Client
+  bun:
+    name: Bun
     runs-on: ubuntu-latest
-    concurrency: ci-client-${{ github.ref }}
+    concurrency: ci-bun-${{ github.ref }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 8
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-          cache-dependency-path: '**/pnpm-lock.yaml'
+          bun-version: latest
 
       - name: Install Packages
-        run: pnpm install --frozen-lockfile
+        run: bun install
+
+      - name: Lint
+        run: bun lint:ci
 
       - name: Build
-        run: pnpm build
+        run: bun run build

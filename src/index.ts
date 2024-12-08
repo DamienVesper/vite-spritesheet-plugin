@@ -1,10 +1,10 @@
-import type { FSWatcher, Plugin, ResolvedConfig } from 'vite';
-import { watch } from 'chokidar';
-import { Minimatch } from 'minimatch';
+import type { FSWatcher, Plugin, ResolvedConfig } from "vite";
+import { watch } from "chokidar";
+import { Minimatch } from "minimatch";
+import { resolve } from "path";
 
-import readDirectory from './utils/readDirectory.js';
+import readDirectory from "./utils/readDirectory.js";
 import { type AtlasList, type CompilerOptions, createSpritesheets } from "./utils/spritesheet.js";
-import { resolve } from 'path';
 
 interface Pattern {
     /**
@@ -80,7 +80,7 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
             async buildStart () {
                 this.info(`Building spritesheets`);
                 spritesheets = await buildSpritesheets(patterns, compilerOpts);
-                atlases = spritesheets.map((sheet) => sheet.json);
+                atlases = spritesheets.map(sheet => sheet.json);
             },
             generateBundle () {
                 for (const sheet of spritesheets) {
@@ -93,14 +93,12 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
                 }
             },
             resolveId (id) {
-                if (id === virtualModuleId) {
+                if (id === virtualModuleId)
                     return resolvedVirtualModuleId;
-                }
             },
             load (id) {
-                if (id === resolvedVirtualModuleId) {
+                if (id === resolvedVirtualModuleId)
                     return `export const atlases = ${JSON.stringify(atlases)}`;
-                }
             }
         },
         {
@@ -123,6 +121,7 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
                     }, 500);
                 }
 
+                // @ts-expect-error Chokidar types are not up-to-date.
                 watcher = watch(patterns.map(pattern => resolve(pattern.rootDir, pattern.glob ?? defaultGlob)), {
                     cwd: config.root,
                     ignoreInitial: true
@@ -135,12 +134,11 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
 
                 async function buildSheets (): Promise<void> {
                     spritesheets = await buildSpritesheets(patterns, compilerOpts);
-                    atlases = spritesheets.map((sheet) => sheet.json);
+                    atlases = spritesheets.map(sheet => sheet.json);
 
                     files.clear();
-                    for (const sheet of spritesheets) {
+                    for (const sheet of spritesheets)
                         files.set(sheet.json.meta.image, sheet.image);
-                    }
                 }
                 await buildSheets();
 
@@ -163,14 +161,12 @@ export function spritesheet ({ patterns, options }: PluginOptions): Plugin[] {
                 await watcher.close();
             },
             resolveId (id) {
-                if (id === virtualModuleId) {
+                if (id === virtualModuleId)
                     return resolvedVirtualModuleId;
-                }
             },
             load (id) {
-                if (id === resolvedVirtualModuleId) {
+                if (id === resolvedVirtualModuleId)
                     return `export const atlases = ${JSON.stringify(atlases)}`;
-                }
             }
         }
     ];

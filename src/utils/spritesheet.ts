@@ -1,8 +1,8 @@
-import { platform } from 'os';
-import { createHash } from 'crypto';
+import { platform } from "os";
+import { createHash } from "crypto";
 
-import { type IOption, MaxRectsPacker } from 'maxrects-packer';
-import { type Image, createCanvas, loadImage } from 'canvas';
+import { type IOption, MaxRectsPacker } from "maxrects-packer";
+import { type Image, createCanvas, loadImage } from "canvas";
 
 export const supportedFormats = [`png`, `jpeg`] as const;
 
